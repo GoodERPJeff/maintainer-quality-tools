@@ -204,7 +204,7 @@ def setup_server(db, odoo_unittest, tested_addons, server_path,
     else:
         # unbuffer keeps output colors
         cmd_odoo = ["unbuffer"] if unbuffer else []
-        cmd_odoo += ["%s/openerp-server" % server_path,
+        cmd_odoo += ["%s/odoo-bin" % server_path,
                      "-d", db,
                      "--log-level=info",
                      "--stop-after-init",
@@ -343,7 +343,7 @@ def main(argv=None):
 
     if odoo_unittest:
         to_test_list = tested_addons_list
-        cmd_odoo_install = ["%s/openerp-server" % server_path,
+        cmd_odoo_install = ["%s/odoo-bin" % server_path,
                             "-d", database,
                             "--stop-after-init",
                             "--log-level=warn",
