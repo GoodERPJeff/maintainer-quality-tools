@@ -12,7 +12,7 @@ import sys
 
 from git_run import GitRun
 
-MANIFEST_FILES = ['__odoo__.py', '__openerp__.py', '__terp__.py']
+MANIFEST_FILES = ['__odoo__.py', '__openerp__.py', '__terp__.py', '__manifest__.py']
 
 
 def is_module(path):
