@@ -203,6 +203,8 @@ def setup_server(db, odoo_unittest, tested_addons, server_path,
         print("Using previous openerp_template database.")
     else:
         # unbuffer keeps output colors
+        ll = ['ls','-l','/home/travis/base-master/odoo-bin']
+        subprocess.check_call(cmd_odoo)
         cmd_odoo = ["unbuffer"] if unbuffer else []
         cmd_odoo += ["%s/odoo-bin" % server_path,
                      "-d", db,
@@ -331,7 +333,7 @@ def main(argv=None):
     database = "openerp_test"
 
     cmd_odoo_test = ["coverage", "run",
-                     "%s/openerp-server" % server_path,
+                     "%s/odoo-bin" % server_path,
                      "-d", database,
                      "--stop-after-init",
                      "--log-level", test_loglevel,
