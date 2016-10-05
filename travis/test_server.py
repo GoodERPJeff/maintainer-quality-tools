@@ -204,7 +204,7 @@ def setup_server(db, odoo_unittest, tested_addons, server_path,
     else:
         # unbuffer keeps output colors
         ll = ['ls','-l','/home/travis/base-master/odoo-bin']
-        subprocess.check_call(cmd_odoo)
+        subprocess.check_call(ll)
         cmd_odoo = ["unbuffer"] if unbuffer else []
         cmd_odoo += ["%s/odoo-bin" % server_path,
                      "-d", db,
