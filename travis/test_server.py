@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 
+import ast
 import re
 import os
 import shutil
@@ -82,14 +83,14 @@ def has_test_errors(fname, dbname, odoo_version, check_loaded=True):
                 ignore = True
                 break
         if ignore:
-            break
+            continue
         for report_pattern in errors_report:
             if report_pattern(log_record):
                 errors.append(log_record)
                 break
 
     if check_loaded:
-        if not [r for r in log_records if 'Modules loaded.' == r['message']]:
+        if not [r for r in log_records if 'Modules loaded.' in r['message']]:
             errors.append({'message': "Modules loaded message not found."})
 
     if errors:
@@ -129,11 +130,15 @@ def get_addons_path(travis_dependencies_dir, travis_build_dir, server_path):
     :param server_path: Server path
     :return: Addons path
     """
-    addons_path_list = get_addons(travis_dependencies_dir)
-    addons_path_list.insert(0, travis_build_dir)
-    addons_path_list.append(server_path + "/addons")
+    addons_path_list = get_addons(travis_build_dir)
+    addons_path_list.extend(get_addons(travis_dependencies_dir))
+    addons_path_list.append(os.path.join(server_path, "addons"))
     addons_path = ','.join(addons_path_list)
     return addons_path
+
+
+def get_server_script(odoo_version):
+    return 'odoo-bin' if float(odoo_version) >= 10 else 'openerp-server'
 
 
 def get_addons_to_check(travis_build_dir, odoo_include, odoo_exclude):
@@ -172,14 +177,35 @@ def get_test_dependencies(addons_path, addons_list):
                 os.path.join(path, addons_list[0]))
             if not manif_path:
                 continue
-            manif = eval(open(manif_path).read())
+            manif = ast.literal_eval(open(manif_path).read())
             return list(
                 set(manif.get('depends', [])) |
                 set(get_test_dependencies(addons_path, addons_list[1:])) -
                 set(addons_list))
 
 
-def setup_server(db, odoo_unittest, tested_addons, server_path,
+def cmd_strip_secret(cmd):
+    cmd_secret = []
+    skip_next = False
+    for param in cmd:
+        if skip_next:
+            skip_next = False
+            continue
+        if param.startswith('--db_'):
+            cmd_secret.append(param.split('=')[0] + '=***')
+            continue
+        if param.startswith('--log-db'):
+            cmd_secret.append('--log-db=***')
+            continue
+        if param in ['-w', '-r']:
+            cmd_secret.extend([param, '***'])
+            skip_next = True
+            continue
+        cmd_secret.append(param)
+    return cmd_secret
+
+
+def setup_server(db, odoo_unittest, tested_addons, server_path, script_name,
                  addons_path, install_options, preinstall_modules=None,
                  unbuffer=True, server_options=None):
     """
@@ -196,6 +222,8 @@ def setup_server(db, odoo_unittest, tested_addons, server_path,
     """
     if preinstall_modules is None:
         preinstall_modules = ['base']
+    if server_options is None:
+        server_options = []
     print("\nCreating instance:")
     try:
         subprocess.check_call(["createdb", db])
@@ -206,13 +234,13 @@ def setup_server(db, odoo_unittest, tested_addons, server_path,
         cm = ['chmod','+x','/home/travis/base-master/odoo-bin']
         subprocess.check_call(cm)
         cmd_odoo = ["unbuffer"] if unbuffer else []
-        cmd_odoo += ["%s/odoo-bin" % server_path,
+        cmd_odoo += ["%s/%s" % (server_path, script_name),
                      "-d", db,
                      "--log-level=info",
                      "--stop-after-init",
                      "--init", ','.join(preinstall_modules),
                      ] + install_options + server_options
-        print(" ".join(cmd_odoo))
+        print(" ".join(cmd_strip_secret(cmd_odoo)))
         subprocess.check_call(cmd_odoo)
     return 0
 
@@ -278,6 +306,8 @@ def main(argv=None):
     unbuffer = str2bool(os.environ.get('UNBUFFER', True))
     data_dir = os.environ.get("DATA_DIR", '~/data_dir')
     test_enable = str2bool(os.environ.get('TEST_ENABLE', True))
+    dbtemplate = os.environ.get('MQT_TEMPLATE_DB', 'openerp_template')
+    database = os.environ.get('MQT_TEST_DB', 'openerp_test')
     if not odoo_version:
         # For backward compatibility, take version from parameter
         # if it's not globally set
@@ -298,6 +328,7 @@ def main(argv=None):
             test_loghandler = 'openerp.tools.yaml_import:DEBUG'
     odoo_full = os.environ.get("ODOO_REPO", "odoo/odoo")
     server_path = get_server_path(odoo_full, odoo_version, travis_home)
+    script_name = get_server_script(odoo_version)
     addons_path = get_addons_path(travis_dependencies_dir,
                                   travis_build_dir,
                                   server_path)
@@ -319,21 +350,19 @@ def main(argv=None):
     else:
         print("Modules to test: %s" % tested_addons)
     # setup the base module without running the tests
-    dbtemplate = "openerp_template"
     preinstall_modules = get_test_dependencies(addons_path,
                                                tested_addons_list)
-    preinstall_modules = list(set(preinstall_modules) - set(get_modules(
-        os.environ.get('TRAVIS_BUILD_DIR'))))
+
+    preinstall_modules = list(set(preinstall_modules or []) - set(get_modules(
+        os.environ.get('TRAVIS_BUILD_DIR')) or [])) or ['base']
     print("Modules to preinstall: %s" % preinstall_modules)
     setup_server(dbtemplate, odoo_unittest, tested_addons, server_path,
-                 addons_path, install_options, preinstall_modules, unbuffer,
-                 server_options)
+                 script_name, addons_path, install_options, preinstall_modules,
+                 unbuffer, server_options)
 
     # Running tests
-    database = "openerp_test"
-
     cmd_odoo_test = ["coverage", "run",
-                     "%s/odoo-bin" % server_path,
+                     "%s/%s" % (server_path, script_name),
                      "-d", database,
                      "--stop-after-init",
                      "--log-level", test_loglevel,
@@ -345,12 +374,12 @@ def main(argv=None):
 
     if odoo_unittest:
         to_test_list = tested_addons_list
-        cmd_odoo_install = ["%s/odoo-bin" % server_path,
-                            "-d", database,
-                            "--stop-after-init",
-                            "--log-level=warn",
-                            ] + install_options + ["--init", None] +\
-                            server_options
+        cmd_odoo_install = [
+            "%s/%s" % (server_path, script_name),
+            "-d", database,
+            "--stop-after-init",
+            "--log-level=warn",
+        ] + install_options + ["--init", None] + server_options
         commands = ((cmd_odoo_install, False),
                     (cmd_odoo_test, True),
                     )
@@ -381,12 +410,13 @@ def main(argv=None):
                 command_call = [item
                                 for item in commands[0][0]
                                 if item not in rm_items] + \
-                    ['--db-filter=^%s$' % database]
+                    ['--db-filter=^%s$' % database,
+                     '--pidfile=/tmp/odoo.pid']
             else:
                 command[-1] = to_test
                 # Run test command; unbuffer keeps output colors
                 command_call = (["unbuffer"] if unbuffer else []) + command
-            print(' '.join(command_call))
+            print(" ".join(cmd_strip_secret(command_call)))
             pipe = subprocess.Popen(command_call,
                                     stderr=subprocess.STDOUT,
                                     stdout=subprocess.PIPE)
@@ -428,6 +458,7 @@ def main(argv=None):
         return 1
     # if we get here, all is OK
     return 0
+
 
 if __name__ == '__main__':
     exit(main())

@@ -9,6 +9,7 @@ omit =
     */scenarios/*
     */test/*
     */tests/*
+    *_example/*
     *__init__.py
     *__openerp__.py
     *__manifest__.py
@@ -21,3 +22,5 @@ exclude_lines =
     if context is None:
     # Don't check obviously not implemented
     raise NotImplementedError
+    # We don't really care what happens if fail
+    except ImportError:
