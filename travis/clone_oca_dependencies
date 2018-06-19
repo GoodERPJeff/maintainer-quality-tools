@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """Usage: clone_oca_dependencies [<checkout_dir> <build_dir>]
 
 Arguments:
@@ -57,7 +57,8 @@ def parse_depfile(depfile, owner='OCA'):
 def git_checkout(deps_checkout_dir, reponame, url, branch):
     checkout_dir = osp.join(deps_checkout_dir, reponame)
     if not osp.isdir(checkout_dir):
-        command = ['git', 'clone', '-q', url, '-b', branch, checkout_dir]
+        command = ['git', 'clone', '-q', url, '-b', branch,
+                   '--single-branch', '--depth=1', checkout_dir]
     else:
         command = ['git', '--git-dir=' + os.path.join(checkout_dir, '.git'),
                    '--work-tree=' + checkout_dir, 'pull', '--ff-only',
@@ -103,7 +104,8 @@ def run(deps_checkout_dir, build_dir):
             if new_dep_filename not in dependencies:
                 dependencies.append(new_dep_filename)
     for reqfilename in reqfilenames:
-        command = ['pip', 'install', '--no-binary', 'pycparser', '-r', reqfilename]
+        command = ['pip', 'install', '--no-binary', 'pycparser',
+                   '-Ur', reqfilename]
         _logger.info('Calling %s', ' '.join(command))
         subprocess.check_call(command)
 
