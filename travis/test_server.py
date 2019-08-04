@@ -234,8 +234,8 @@ def setup_server(db, odoo_unittest, tested_addons, server_path, script_name,
         print("Using previous openerp_template database.")
     else:
         # unbuffer keeps output colors
-        cm = ['chmod','+x','/home/travis/base-10.0/odoo-bin']
-        subprocess.check_call(cm)
+        #cm = ['chmod','+x','/home/travis/base-10.0/odoo-bin']
+        #subprocess.check_call(cm)
         cmd_odoo = ["unbuffer"] if unbuffer else []
         cmd_odoo += ["%s/%s" % (server_path, script_name),
                      "-d", db,
